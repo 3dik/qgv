@@ -18,23 +18,30 @@ License along with this library.
 #include "MainWindow.h"
 #include "moc_MainWindow.cpp"
 #include "ui_MainWindow.h"
-#include "QGVScene.h"
-#include "QGVNode.h"
-#include "QGVEdge.h"
-#include "QGVSubGraph.h"
 #include <QMessageBox>
 
+#include <ogdf/cluster/ClusterPlanarizationLayout.h>
+#include <ogdf/labeling/ELabelPosSimple.h>
+
 MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
-    ui(new Ui::MainWindow)
+    QMainWindow(parent), ui(new Ui::MainWindow),
+    _graph(), _clusterGraph(_graph),
+    _attributes(_clusterGraph), _edgeLabels(_attributes)
 {
     ui->setupUi(this);
+    ui->graphicsView->setScene(&_scene);
 
-    _scene = new QGVScene("DEMO", this);
-    ui->graphicsView->setScene(_scene);
+    connect(&_scene, SIGNAL(nodeContextMenu(ogdf::node)), SLOT(nodeContextMenu(ogdf::node)));
+    connect(&_scene, SIGNAL(nodeDoubleClick(ogdf::node)), SLOT(nodeDoubleClick(ogdf::node)));
 
-    connect(_scene, SIGNAL(nodeContextMenu(QGVNode*)), SLOT(nodeContextMenu(QGVNode*)));
-    connect(_scene, SIGNAL(nodeDoubleClick(QGVNode*)), SLOT(nodeDoubleClick(QGVNode*)));
+    using ogdf::GraphAttributes;
+    _attributes.initAtt(
+            GraphAttributes::nodeGraphics |
+            GraphAttributes::edgeGraphics |
+            GraphAttributes::nodeLabel |
+            GraphAttributes::edgeLabel |
+            GraphAttributes::edgeArrow
+            );
 }
 
 MainWindow::~MainWindow()
@@ -44,85 +51,72 @@ MainWindow::~MainWindow()
 
 void MainWindow::drawGraph()
 {
-    /*
-    _scene->loadLayout("digraph test{node [style=filled,fillcolor=white];N1 -> N2;N2 -> N3;N3 -> N4;N4 -> N1;}");
-    connect(_scene, SIGNAL(nodeContextMenu(QGVNode*)), SLOT(nodeContextMenu(QGVNode*)));
-    connect(_scene, SIGNAL(nodeDoubleClick(QGVNode*)), SLOT(nodeDoubleClick(QGVNode*)));
-    ui->graphicsView->setScene(_scene);
-    return;
-    */
-
-    //Configure scene attributes
-    _scene->setGraphAttribute("label", "DEMO");
-
-    _scene->setGraphAttribute("splines", "ortho");
-    _scene->setGraphAttribute("rankdir", "LR");
-    //_scene->setGraphAttribute("concentrate", "true"); //Error !
-    _scene->setGraphAttribute("nodesep", "0.4");
-
-    _scene->setNodeAttribute("shape", "box");
-    _scene->setNodeAttribute("style", "filled");
-    _scene->setNodeAttribute("fillcolor", "white");
-    _scene->setNodeAttribute("height", "1.2");
-    _scene->setEdgeAttribute("minlen", "3");
-    //_scene->setEdgeAttribute("dir", "both");
+    using ogdf::node;
+    using ogdf::edge;
+    using ogdf::cluster;
 
     //Add some nodes
-    QGVNode *node1 = _scene->addNode("BOX");
-    node1->setIcon(QImage(":/icons/Gnome-System-Run-64.png"));
-    QGVNode *node2 = _scene->addNode("SERVER0");
-    node2->setIcon(QImage(":/icons/Gnome-Network-Transmit-64.png"));
-    QGVNode *node3 = _scene->addNode("SERVER1");
-    node3->setIcon(QImage(":/icons/Gnome-Network-Transmit-64.png"));
-    QGVNode *node4 = _scene->addNode("USER");
-    node4->setIcon(QImage(":/icons/Gnome-Stock-Person-64.png"));
-    QGVNode *node5 = _scene->addNode("SWITCH");
-    node5->setIcon(QImage(":/icons/Gnome-Network-Server-64.png"));
+    node node1 = _graph.newNode();
+    setLabel(node1, "BOX");
+    node node2 = _graph.newNode();
+    setLabel(node2, "SERVER0");
+    node node3 = _graph.newNode();
+    setLabel(node3, "SERVER1");
+    node node4 = _graph.newNode();
+    setLabel(node4, "USER");
+    node node5 = _graph.newNode();
+    setLabel(node5, "SWITCH");
 
     //Add some edges
-    _scene->addEdge(node1, node2, "TTL")->setAttribute("color", "red");
-    _scene->addEdge(node1, node2, "SERIAL");
-    _scene->addEdge(node1, node3, "RAZ")->setAttribute("color", "blue");
-    _scene->addEdge(node2, node3, "SECU");
+    setLabel(_graph.newEdge(node1, node2), "TTL");
+    setLabel(_graph.newEdge(node1, node2), "SERIAL");
+    setLabel(_graph.newEdge(node1, node3), "RAZ");
+    setLabel(_graph.newEdge(node2, node3), "SECU");
 
-    _scene->addEdge(node2, node4, "STATUS")->setAttribute("color", "red");
+    setLabel(_graph.newEdge(node2, node4), "STATUS");
 
-    _scene->addEdge(node4, node3, "ACK")->setAttribute("color", "red");
+    setLabel(_graph.newEdge(node4, node3), "ACK");
 
-    _scene->addEdge(node4, node2, "TBIT");
-    _scene->addEdge(node4, node2, "ETH");
-    _scene->addEdge(node4, node2, "RS232");
+    setLabel(_graph.newEdge(node4, node2), "TBIT");
+    setLabel(_graph.newEdge(node4, node2), "ETH");
+    setLabel(_graph.newEdge(node4, node2), "RS232");
 
-    _scene->addEdge(node4, node5, "ETH1");
-    _scene->addEdge(node2, node5, "ETH2");
+    setLabel(_graph.newEdge(node4, node5), "ETH1");
+    setLabel(_graph.newEdge(node2, node5), "ETH2");
 
-    QGVSubGraph *sgraph = _scene->addSubGraph("SUB1");
-    sgraph->setAttribute("label", "OFFICE");
+    cluster sgraph = _clusterGraph.createEmptyCluster();
+    setLabel(sgraph, "SUB1");
 
-    QGVNode *snode1 = sgraph->addNode("PC0152");
-    QGVNode *snode2 = sgraph->addNode("PC0153");
+    node snode1 = _graph.newNode();
+    setLabel(snode1, "PC0152");
+    _clusterGraph.reassignNode(snode1, sgraph);
+    node snode2 = _graph.newNode();
+    setLabel(snode2, "PC0153");
+    _clusterGraph.reassignNode(snode2, sgraph);
 
-    _scene->addEdge(snode1, snode2, "RT7");
+    setLabel(_graph.newEdge(snode1, snode2), "RT7");
 
-    _scene->addEdge(node3, snode1, "GB8");
-    _scene->addEdge(node3, snode2, "TS9");
+    setLabel(_graph.newEdge(node3, snode1), "GB8");
+    setLabel(_graph.newEdge(node3, snode2), "TS9");
 
+    cluster ssgraph = _clusterGraph.newCluster(sgraph);
+    setLabel(ssgraph, "SUB2");
 
-    QGVSubGraph *ssgraph = sgraph->addSubGraph("SUB2");
-    ssgraph->setAttribute("label", "DESK");
-    _scene->addEdge(snode1, ssgraph->addNode("PC0155"), "S10");
+    node ssnode = _graph.newNode();
+    setLabel(ssnode, "PC0155");
+    _clusterGraph.reassignNode(ssnode, ssgraph);
+    setLabel(_graph.newEdge(snode1, ssnode), "S10");
 
-    //Layout scene
-    _scene->applyLayout();
+    layout();
 
     //Fit in view
-    ui->graphicsView->fitInView(_scene->sceneRect(), Qt::KeepAspectRatio);
+    ui->graphicsView->fitInView(_scene.sceneRect(), Qt::KeepAspectRatio);
 }
 
-void MainWindow::nodeContextMenu(QGVNode *node)
+void MainWindow::nodeContextMenu(ogdf::node node)
 {
     //Context menu exemple
-    QMenu menu(node->label());
+    QMenu menu(_attributes.label(node).c_str());
 
     menu.addSeparator();
     menu.addAction(tr("Informations"));
@@ -133,7 +127,27 @@ void MainWindow::nodeContextMenu(QGVNode *node)
         return;
 }
 
-void MainWindow::nodeDoubleClick(QGVNode *node)
+void MainWindow::nodeDoubleClick(ogdf::node node)
 {
-    QMessageBox::information(this, tr("Node double clicked"), tr("Node %1").arg(node->label()));
+    auto str = _attributes.label(node);
+    QMessageBox::information(this, tr("Node double clicked"),
+                             tr("Node %1").arg(str.c_str()));
+}
+
+void MainWindow::layout()
+{
+    _scene.loadGraph(qgv::all_attributes{&_attributes, &_edgeLabels});
+    _scene.preprocess();
+
+    ogdf::ClusterPlanarizationLayout layouter;
+    layouter.call(_graph, _attributes, _clusterGraph);
+
+    ogdf::ELabelPosSimple labeller;
+    //try not to render directly on the edge, but this won't always work
+    labeller.m_edgeDistance = 10;
+    labeller.m_midOnEdge = false;
+    labeller.call(_attributes, _edgeLabels);
+
+    //Layout scene
+    _scene.applyLayout();
 }

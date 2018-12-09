@@ -19,56 +19,29 @@ License along with this library.
 #define QGVNODE_H
 
 #include "qgv.h"
-#include <QGraphicsItem>
-#include <QPen>
+#include "QGVElement.h"
 
-class QGVEdge;
-class QGVScene;
-class QGVNodePrivate;
+#include <QPen>
+#include <QFont>
 
 /**
  * @brief Node item
  *
  */
-class QGVCORE_EXPORT QGVNode : public QGraphicsItem
+class QGVNode : public GraphElement<ogdf::node, 2>
 {
 public:
-    ~QGVNode();
-
-    QString label() const;
-    void setLabel(const QString &label);
-
+    QGVNode(QGraphicsScene *, ogdf::node, qgv::all_attributes);
     QRectF boundingRect() const;
     void paint(QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget = 0);
-    void setAttribute(const QString &label, const QString &value);
-    QString getAttribute(const QString &name) const;
-
-    void setIcon(const QImage &icon);
-
-    enum { Type = UserType + 2 };
-    int type() const
-    {
-        return Type;
-    }
+    void preprocess();
+    void updateLayout();
 
 private:
-    friend class QGVScene;
-    friend class QGVSubGraph;
-    void updateLayout();
-    QGVNode(QGVNodePrivate* node, QGVScene *scene);
-
-		// Not implemented in QGVNode.cpp
-//		QPainterPath makeShape(Agnode_t* node) const;
-//		QPolygonF makeShapeHelper(Agnode_t* node) const;
-
-    QPainterPath _path;
     QPen _pen;
     QBrush _brush;
-    QImage _icon;
-
-    QGVScene *_scene;
-    QGVNodePrivate* _node;
+    QSizeF _size;
+    QFont _font;
 };
-
 
 #endif // QGVNODE_H

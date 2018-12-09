@@ -1,11 +1,10 @@
 #GraphViz librairie
-DEFINES += WITH_CGRAPH
 INCLUDEPATH += private
 QMAKE_CXXFLAGS += -DQGVCORE_LIB
 
 unix {
- CONFIG += link_pkgconfig
- PKGCONFIG += libcdt libgvc libcgraph libgraph
+ #OGDF doesn't seem to provide a pkg-config file
+ LIBS += -lOGDF
 }
 win32 {
  #Configure Windows GraphViz path here :

@@ -11,10 +11,6 @@ SET(qgvlib_UI
 # all files which may be mocced
 SET(qgvlib_CPP
 	private/QGVCore.cpp
-  private/QGVGraphPrivate.cpp
-  private/QGVEdgePrivate.cpp
-  private/QGVGvcPrivate.cpp
-  private/QGVNodePrivate.cpp
   QGVEdge.cpp
   QGVNode.cpp
   QGVScene.cpp

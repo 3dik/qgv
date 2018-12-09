@@ -35,12 +35,27 @@ public:
     void drawGraph();
 
 private slots:
-    void nodeContextMenu(QGVNode* node);
-    void nodeDoubleClick(QGVNode* node);
+    void nodeContextMenu(ogdf::node node);
+    void nodeDoubleClick(ogdf::node node);
 
 private:
+
+    void layout();
+
     Ui::MainWindow *ui;
-    QGVScene *_scene;
+    QGVScene _scene;
+    ogdf::Graph _graph;
+    ogdf::ClusterGraph _clusterGraph;
+    ogdf::ClusterGraphAttributes _attributes;
+    ogdf::ELabelInterface<double> _edgeLabels;
+
+    //we're lazy
+    template <class T>
+    void setLabel(T obj, std::string str)
+    {
+        _attributes.label(obj) = str;
+    }
+
 };
 
 #endif // MAINWINDOW_H

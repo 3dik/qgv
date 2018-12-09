@@ -30,18 +30,11 @@ SOURCES += QGVScene.cpp \
     QGVEdge.cpp \
     QGVSubGraph.cpp \
 		private/QGVCore.cpp \
-		private/QGVGraphPrivate.cpp \
-		private/QGVGvcPrivate.cpp \
-		private/QGVEdgePrivate.cpp \
-		private/QGVNodePrivate.cpp
 
 HEADERS  += QGVScene.h \
+    QGVElement.h \
     QGVNode.h \
     QGVEdge.h \
     QGVSubGraph.h \
 		private/QGVCore.h \
-		private/QGVGraphPrivate.h \
-		private/QGVGvcPrivate.h \
-		private/QGVEdgePrivate.h \
-		private/QGVNodePrivate.h \
     qgv.h

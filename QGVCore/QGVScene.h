@@ -18,56 +18,45 @@ License along with this library.
 #ifndef QGVSCENE_H
 #define QGVSCENE_H
 
+#include <memory>
+#include <forward_list>
+
 #include "qgv.h"
-#include <QGraphicsScene>
-
-class QGVNode;
-class QGVEdge;
-class QGVSubGraph;
-
-class QGVGraphPrivate;
-class QGVGvcPrivate;
+#include "QGVElement.h"
 
 /**
- * @brief GraphViz interactive scene
+ * @brief OGDF interactive scene
  *
  */
-class QGVCORE_EXPORT QGVScene : public QGraphicsScene
+class QGVCORE_EXPORT QGVScene :
+    //TODO: GraphObserver & ClusterGraphObserver might make sense
+    public QGraphicsScene
 {
     Q_OBJECT
 public:
 
-    explicit QGVScene(const QString &name, QObject *parent = 0);
-    ~QGVScene();
+    explicit QGVScene(QObject *parent = 0);
 
-    void setGraphAttribute(const QString &name, const QString &value);
-    void setNodeAttribute(const QString &name, const QString &value);
-    void setEdgeAttribute(const QString &name, const QString &value);
-
-    QGVNode* addNode(const QString& label);
-    QGVEdge* addEdge(QGVNode* source, QGVNode* target, const QString& label=QString());
-    QGVSubGraph* addSubGraph(const QString& name, bool cluster=true);
-
-    void deleteNode(QGVNode *node);
-    void deleteEdge(QGVEdge *edge);
-    void deleteSubGraph(QGVSubGraph *subgraph);
-
-    void setRootNode(QGVNode *node);
-
-    void loadLayout(const QString &text);
+    //remove all items and create new ones with the given graph elements
+    //
+    //All referenced data (attributes, graph etc.) must be alive until this
+    //object is destroyed or another data set is load by this method.
+    void loadGraph(qgv::all_attributes attributes);
+    //set attributes whose values cannot be figured out by ogdf
+    void preprocess();
+    //apply the layout informations so that we're ready for rendering
     void applyLayout();
-    void clear();
 
 
 signals:
-    void nodeContextMenu(QGVNode* node);
-    void nodeDoubleClick(QGVNode* node);
+    void nodeContextMenu(ogdf::node node);
+    void nodeDoubleClick(ogdf::node node);
 
-    void edgeContextMenu(QGVEdge* edge);
-    void edgeDoubleClick(QGVEdge* edge);
+    void edgeContextMenu(ogdf::edge edge);
+    void edgeDoubleClick(ogdf::edge edge);
 
-    void subGraphContextMenu(QGVSubGraph* graph);
-    void subGraphDoubleClick(QGVSubGraph* graph);
+    void subGraphContextMenu(ogdf::cluster graph);
+    void subGraphDoubleClick(ogdf::cluster graph);
 
     void graphContextMenuEvent();
     
@@ -77,18 +66,17 @@ protected:
     virtual void contextMenuEvent(QGraphicsSceneContextMenuEvent * contextMenuEvent);
     virtual void mouseDoubleClickEvent(QGraphicsSceneMouseEvent * mouseEvent);
     virtual void drawBackground(QPainter * painter, const QRectF & rect);
+
 private:
-    friend class QGVNode;
-    friend class QGVEdge;
-    friend class QGVSubGraph;
 
-    QGVGvcPrivate *_context;
-    QGVGraphPrivate *_graph;
-    //QFont _font;
+    void add(ManagedElement *);
+    void add(ogdf::node);
+    void add(ogdf::edge);
+    void add(ogdf::cluster);
 
-    QList<QGVNode*> _nodes;
-    QList<QGVEdge*> _edges;
-    QList<QGVSubGraph*> _subGraphs;
+    qgv::all_attributes _attributes;
+
+    std::forward_list<std::unique_ptr<ManagedElement> > _elements;
 };
 
 #endif // QGVSCENE_H

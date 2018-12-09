@@ -17,26 +17,16 @@ License along with this library.
 ***************************************************************/
 #include <QGVEdge.h>
 #include <QGVCore.h>
-#include <QGVScene.h>
-#include <QGVGraphPrivate.h>
-#include <QGVEdgePrivate.h>
-#include <QDebug>
 #include <QPainter>
 
-QGVEdge::QGVEdge(QGVEdgePrivate *edge, QGVScene *scene) :  _scene(scene), _edge(edge)
+#include <ogdf/labeling/ELabelInterface.h>
+
+const auto labelType = ogdf::LabelType::Name;
+
+QGVEdge::QGVEdge(QGraphicsScene *p, ogdf::edge e, qgv::all_attributes a) :
+    GraphElement(p, e, a)
 {
     setFlag(QGraphicsItem::ItemIsSelectable, true);
-}
-
-QGVEdge::~QGVEdge()
-{
-    _scene->removeItem(this);
-		delete _edge;
-}
-
-QString QGVEdge::label() const
-{
-    return getAttribute("xlabel");
 }
 
 QRectF QGVEdge::boundingRect() const
@@ -54,9 +44,14 @@ QPainterPath QGVEdge::shape() const
     return ps.createStroke(_path);
 }
 
-void QGVEdge::setLabel(const QString &label)
+void QGVEdge::preprocess()
 {
-    setAttribute("xlabel", label);
+    ogdf::EdgeLabel<double> &data = _attributes.edgeLabels->getLabel(_element);
+    data.addType(labelType);
+    QSizeF size = QGVCore::sizeOfString(label());
+    data.setWidth(labelType, size.width());
+    data.setHeight(labelType, size.height());
+    _attributes.edgeLabels->setLabel(_element, data);
 }
 
 void QGVEdge::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidget *)
@@ -76,19 +71,7 @@ void QGVEdge::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidge
 
     painter->drawPath(_path);
 
-    /*
-    QRectF pp = _path.controlPointRect();
-    if(pp.width() < pp.height())
-    {
-        painter->save();
-        painter->translate(_label_rect.topLeft());
-        painter->rotate(90);
-        painter->drawText(QRectF(QPointF(0, -_label_rect.width()), _label_rect.size()), Qt::AlignCenter, _label);
-        painter->restore();
-    }
-    else
-    */
-    painter->drawText(_label_rect, Qt::AlignCenter, _label);
+    painter->drawText(_label_rect, Qt::AlignCenter, label());
 
     painter->setBrush(QBrush(_pen.color(), Qt::SolidPattern));
     painter->drawPolygon(_head_arrow);
@@ -96,58 +79,40 @@ void QGVEdge::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidge
     painter->restore();
 }
 
-void QGVEdge::setAttribute(const QString &name, const QString &value)
-{
-    char empty[] = "";
-    agsafeset(_edge->edge(), name.toLocal8Bit().data(), value.toLocal8Bit().data(), empty);
-}
-
-QString QGVEdge::getAttribute(const QString &name) const
-{
-		char* value = agget(_edge->edge(), name.toLocal8Bit().data());
-    if(value)
-        return value;
-    return QString();
-}
-
 void QGVEdge::updateLayout()
 {
     prepareGeometryChange();
 
-		qreal gheight = QGVCore::graphHeight(_scene->_graph->graph());
-
-		const splines* spl = ED_spl(_edge->edge());
-    _path = QGVCore::toPath(spl, gheight);
-
+    //We only render straight lines because we haven't figured out yet how to
+    //do this with OGDF and without any intersections. And because it's easier.
+    const ogdf::DPolyline &bends = _attributes.clusterGraph->bends(_element);
+    _path = QGVCore::toPath(&bends);
 
     //Edge arrows
-    if((spl->list != 0) && (spl->list->size%3 == 1))
+    using ogdf::EdgeArrow;
+    EdgeArrow type = _attributes.clusterGraph->arrowType(_element);
+    float arrowSize = 10;
+    _tail_arrow.clear();
+    _head_arrow.clear();
+    if(type == EdgeArrow::First || type == EdgeArrow::Both)
     {
-        if(spl->list->sflag)
-        {
-            _tail_arrow = toArrow(QLineF(QGVCore::toPoint(spl->list->list[0], gheight), QGVCore::toPoint(spl->list->sp, gheight)));
-        }
-
-        if(spl->list->eflag)
-        {
-            _head_arrow = toArrow(QLineF(QGVCore::toPoint(spl->list->list[spl->list->size-1], gheight), QGVCore::toPoint(spl->list->ep, gheight)));
-        }
+        _tail_arrow = toArrow(lineToEndpoint(bends, true, arrowSize));
+    }
+    if(type == EdgeArrow::Last || type == EdgeArrow::Both)
+    {
+        _head_arrow = toArrow(lineToEndpoint(bends, false, arrowSize));
     }
 
     _pen.setWidth(1);
-    _pen.setColor(QGVCore::toColor(getAttribute("color")));
-    _pen.setStyle(QGVCore::toPenStyle(getAttribute("style")));
 
-    //Edge label
-		textlabel_t *xlabel = ED_xlabel(_edge->edge());
-    if(xlabel)
-    {
-        _label = xlabel->text;
-        _label_rect.setSize(QSize(xlabel->dimen.x, xlabel->dimen.y));
-				_label_rect.moveCenter(QGVCore::toPoint(xlabel->pos, QGVCore::graphHeight(_scene->_graph->graph())));
+    ogdf::EdgeLabel<double> data = _attributes.edgeLabels->getLabel(_element);
+    //not existing labels provide random junk rectangle data
+    if (data.usedLabel()) {
+        QSizeF size(data.getWidth(labelType), data.getHeight(labelType));
+        QPointF pos(data.getX(labelType), data.getY(labelType));
+        _label_rect.setSize(size);
+        _label_rect.moveCenter(pos);
     }
-
-    setToolTip(getAttribute("tooltip"));
 }
 
 QPolygonF QGVEdge::toArrow(const QLineF &line) const
@@ -162,4 +127,22 @@ QPolygonF QGVEdge::toArrow(const QLineF &line) const
     polygon.append(line.p1() - o);
 
     return polygon;
+}
+
+QLineF QGVEdge::lineToEndpoint(const ogdf::DPolyline &lines,
+                               bool startPoint, double len)
+{
+    ogdf::DPoint from, to;
+    from = *lines.get(lines.size() - 2);
+    to = lines.back();
+    if (startPoint)
+    {
+        from = *lines.get(1);
+        to = lines.front();
+    }
+
+    //resize with setLength moving p1 instead of p2
+    QLineF inverted = QLineF(QGVCore::toPoint(to), QGVCore::toPoint(from));
+    inverted.setLength(len);
+    return QLineF( inverted.p2(), inverted.p1());
 }

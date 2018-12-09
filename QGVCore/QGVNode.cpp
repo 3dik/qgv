@@ -17,36 +17,30 @@ License along with this library.
 ***************************************************************/
 #include <QGVNode.h>
 #include <QGVCore.h>
-#include <QGVScene.h>
-#include <QGVGraphPrivate.h>
-#include <QGVNodePrivate.h>
-#include <QDebug>
+
 #include <QPainter>
 
-QGVNode::QGVNode(QGVNodePrivate *node, QGVScene *scene): _scene(scene), _node(node)
+QGVNode::QGVNode(QGraphicsScene *p, ogdf::node n, qgv::all_attributes a) :
+    GraphElement(p, n, a)
 {
     setFlag(QGraphicsItem::ItemIsSelectable, true);
 }
 
-QGVNode::~QGVNode()
+void QGVNode::preprocess()
 {
-    _scene->removeItem(this);
-    delete _node;
-}
-
-QString QGVNode::label() const
-{
-    return getAttribute("label");
-}
-
-void QGVNode::setLabel(const QString &label)
-{
-    setAttribute("label", label);
+    //We don't manage node label positioning with OGDF because we don't know
+    //how to render the string, the shape etc. in the way OGDF thinks it should
+    //be rendered. So until OGDF provides getters for these data, we do it by
+    //ourself.
+    QSizeF size = QGVCore::sizeOfString(label(), _font) * 1.2;
+    size = size.expandedTo(QSizeF( 30, 30));
+    _attributes.clusterGraph->width(_element) = size.width();
+    _attributes.clusterGraph->height(_element) = size.height();
 }
 
 QRectF QGVNode::boundingRect() const
 {
-    return _path.boundingRect();
+    return QRectF(QPointF(), _size);
 }
 
 void QGVNode::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidget *)
@@ -54,6 +48,7 @@ void QGVNode::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidge
     painter->save();
 
     painter->setPen(_pen);
+    painter->setFont(_font);
 
     if(isSelected())
     {
@@ -64,65 +59,23 @@ void QGVNode::paint(QPainter * painter, const QStyleOptionGraphicsItem *, QWidge
     else
         painter->setBrush(_brush);
 
-    painter->drawPath(_path);
+    painter->drawRect(boundingRect());
+    painter->drawText(boundingRect(), Qt::AlignCenter, GraphElement::label());
 
-    painter->setPen(QGVCore::toColor(getAttribute("labelfontcolor")));
-
-    const QRectF rect = boundingRect().adjusted(2,2,-2,-2); //Margin
-    if(_icon.isNull())
-    {
-        painter->drawText(rect, Qt::AlignCenter , QGVNode::label());
-    }
-    else
-    {
-        painter->drawText(rect.adjusted(0,0,0, -rect.height()*2/3), Qt::AlignCenter , QGVNode::label());
-
-        const QRectF img_rect = rect.adjusted(0, rect.height()/3,0, 0);
-        QImage img = _icon.scaled(img_rect.size().toSize(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        painter->drawImage(img_rect.topLeft() + QPointF((img_rect.width() - img.rect().width())/2, 0), img);
-    }
     painter->restore();
-}
-
-void QGVNode::setAttribute(const QString &name, const QString &value)
-{
-    char empty[] = "";
-    agsafeset(_node->node(), name.toLocal8Bit().data(), value.toLocal8Bit().data(), empty);
-}
-
-QString QGVNode::getAttribute(const QString &name) const
-{
-    char* value = agget(_node->node(), name.toLocal8Bit().data());
-    if(value)
-        return value;
-    return QString();
-}
-
-void QGVNode::setIcon(const QImage &icon)
-{
-    _icon = icon;
 }
 
 void QGVNode::updateLayout()
 {
     prepareGeometryChange();
-    qreal width = ND_width(_node->node())*DotDefaultDPI;
-    qreal height = ND_height(_node->node())*DotDefaultDPI;
+    QRectF rect = QGVCore::elementRect(_attributes.clusterGraph, _element);
+    rect.moveCenter(rect.topLeft()); //ogdf node position is the node's center
 
-    //Node Position (center)
-    qreal gheight = QGVCore::graphHeight(_scene->_graph->graph());
-    setPos(QGVCore::centerToOrigin(QGVCore::toPoint(ND_coord(_node->node()), gheight), width, height));
+    setPos(rect.topLeft());
+    _size = rect.size();
 
     //Node on top
     setZValue(1);
 
-    //Node path
-    _path = QGVCore::toPath(ND_shape(_node->node())->name, (polygon_t*)ND_shape_info(_node->node()), width, height);
     _pen.setWidth(1);
-
-    _brush.setStyle(QGVCore::toBrushStyle(getAttribute("style")));
-    _brush.setColor(QGVCore::toColor(getAttribute("fillcolor")));
-    _pen.setColor(QGVCore::toColor(getAttribute("color")));
-
-    setToolTip(getAttribute("tooltip"));
 }

@@ -19,55 +19,27 @@ License along with this library.
 #define QGVSUBGRAPH_H
 
 #include "qgv.h"
-#include <QGraphicsItem>
+#include "QGVElement.h"
 #include <QPen>
-
-class QGVNode;
-class QGVEdge;
-class QGVScene;
-class QGVGraphPrivate;
 
 /**
  * @brief SubGraph item
  *
  */
-class QGVCORE_EXPORT QGVSubGraph : public QGraphicsItem
+class QGVSubGraph : public GraphElement<ogdf::cluster, 4>
 {
 public:
-    ~QGVSubGraph();
-
-    QString name() const;
-
-    QGVNode* addNode(const QString& label);
-    QGVSubGraph* addSubGraph(const QString& name, bool cluster=true);
+    QGVSubGraph(QGraphicsScene *, ogdf::cluster, qgv::all_attributes);
 
     QRectF boundingRect() const;
     void paint(QPainter * painter, const QStyleOptionGraphicsItem * option, QWidget * widget = 0);
-    void setAttribute(const QString &name, const QString &value);
-    QString getAttribute(const QString &name) const;
     void updateLayout();
-
-    enum { Type = UserType + 4 };
-    int type() const
-    {
-        return Type;
-    }
-
+    void preprocess();
 
 private:
-    friend class QGVScene;
-    QGVSubGraph(QGVGraphPrivate* subGraph, QGVScene *scene);
-
-    QGVScene *_scene;
-    QGVGraphPrivate *_sgraph;
-    double _height, _width;
+    QSizeF _size;
     QPen _pen;
     QBrush _brush;
-
-    QString _label;
-    QRectF _label_rect;
-
-    QList<QGVNode*> _nodes;
 };
 
 #endif // QGVSUBGRAPH_H
